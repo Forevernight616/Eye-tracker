@@ -28,36 +28,17 @@ def get_landmark(image):
         mjr_landmarks = None   
     return result, mjr_landmarks
 
-def draw_landmarks(image, result):
+def draw_landmarks(image, result, frame_width, frame_height):
     image.flags.writeable = True
     if result.multi_face_landmarks : 
         for face_landmark in result.multi_face_landmarks:
-            # mp_drawing.draw_landmarks(image, 
-            #                           connections= mp_face_mesh.FACEMESH_TESSELATION,
-            #                           landmark_list = face_landmark,
-            #                           landmark_drawing_spec=None, 
-            #                           connection_drawing_spec=mp_drawing_styles.get_default_face_mesh_tesselation_style())
-            
-            # draw around the eyes and mouth
-            # mp_drawing.draw_landmarks(image, 
-            #                           connections= mp_face_mesh.FACEMESH_CONTOURS,
-            #                           landmark_list = face_landmark,
-            #                           landmark_drawing_spec=None, 
-            #                           connection_drawing_spec=mp_drawing_styles.get_default_face_mesh_contours_style())  
-            mp_drawing.draw_landmarks(image, 
-                                      connections= mp_face_mesh.FACEMESH_IRISES,
-                                      landmark_list = face_landmark,
-                                      landmark_drawing_spec=None, 
-                                      connection_drawing_spec=mp_drawing_styles.get_default_face_mesh_iris_connections_style())  
-        # left_iris = face_landmark.landmark[474:478]
-        # right_iris = face_landmark.landmark[469:473]
-        # left_iris_coord = [left_iris.z, left_iris.z]
-        # right_iris_coord = [right_iris.z, right_iris.z]
-
-        left_iris = face_landmark.landmark[473]
-        right_iris = face_landmark.landmark[468]
-
-    return image, left_iris, right_iris
+            left_iris = face_landmark.landmark[473]
+            right_iris = face_landmark.landmark[468]
+            cv2.circle(frame, (int(left_iris.x * frame_width),int(left_iris.y * frame_height)), 1, (255,100,0), thickness=4) # visuallize the iris center
+            cv2.circle(frame, (int(right_iris.x * frame_width),int(right_iris.y * frame_height)), 1, (255,100,0), thickness=4) # visuallize the iris center
+            cv2.putText(frame, "left x: {:.4}, y: {:.4}".format(left_iris.x, left_iris.y), (20, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+            cv2.putText(frame, "right x: {:.4}, y: {:.4}".format(right_iris.x, right_iris.y), (20, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+    return image
 
 capture = cv2.VideoCapture(0)
 
@@ -69,10 +50,11 @@ if not capture.isOpened():
 while True:
     isTrue, frame = capture.read()
     results, mjr_landmarks = get_landmark(frame)
+    dimensions = frame.shape # For visualization purpose
+    frame_height = dimensions[0]
+    frame_width = dimensions[1]
     if mjr_landmarks is not None:
-        frame_v2, left_iris, right_iris= draw_landmarks(frame, results)
-        cv2.putText(frame, "left x: {:.4}, y: {:.4}".format(left_iris.x, left_iris.y), (20, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
-        cv2.putText(frame, "right x: {:.4}, y: {:.4}".format(right_iris.x, right_iris.y), (20, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+        frame_v2= draw_landmarks(frame, results, frame_width, frame_height)
     else : 
         cv2.putText(frame, "No face detected", (20, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
 
