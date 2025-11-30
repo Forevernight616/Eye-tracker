@@ -4,6 +4,10 @@ import numpy as np
 import os
 import pyautogui
 from calibration import EyeTracker
+from KalmanFilter import KalmanFilter
+from scipy.spatial.distance import euclidean
+
+import keyboard
 
 pyautogui.FAILSAFE = False
 
@@ -15,6 +19,16 @@ mp_drawing_styles = mp.solutions.drawing_styles
 SCREEN_WIDTH = 1920
 SCREEN_HEIGHT = 1080
 
+# Landmark Indices for Gaze Feature Calculation
+LEFT_IRIS_IDX = 473
+RIGHT_IRIS_IDX = 468
+# Eye Midpoint/Reference Indices (outer and inner corner for center reference)
+LEFT_EYE_INNER_CORNER_IDX = 133
+RIGHT_EYE_INNER_CORNER_IDX = 362
+LEFT_EYE_OUTER_CORNER_IDX = 33
+RIGHT_EYE_OUTER_CORNER_IDX = 263
+
+
 #initialize the FaceMesh model 
 face_mesh_model = mp_face_mesh.FaceMesh(
     static_image_mode=False, # video stream
@@ -23,35 +37,54 @@ face_mesh_model = mp_face_mesh.FaceMesh(
     min_detection_confidence=0.5
 )
 
-def draw_eyes_landmarks(image: np.ndarray, face_landmark) -> None:
-    image.flags.writeable = True
-    frame_height, frame_width, _ = image.shape
-    left_iris = face_landmark.landmark[473]
-    right_iris = face_landmark.landmark[468]
-
-    cv2.circle(image, (int(left_iris.x * frame_width),int(left_iris.y * frame_height)), 1, (255,100,0), thickness=4) # visuallize the iris center
-    cv2.circle(image, (int(right_iris.x * frame_width),int(right_iris.y * frame_height)), 1, (255,100,0), thickness=4) # visuallize the iris center
-    cv2.putText(image, "left x: {:.4}, y: {:.4}".format(left_iris.x, left_iris.y), (20, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
-    cv2.putText(image, "right x: {:.4}, y: {:.4}".format(right_iris.x, right_iris.y), (20, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
-
-    #draw the nose's line
-    between_brows= face_landmark.landmark[9]
-    lowest_nose = face_landmark.landmark[6]
-    nose_tip = face_landmark.landmark[4]
-    cv2.circle(image, (int(between_brows.x * frame_width),int(between_brows.y * frame_height)), 1, (0,255,0), thickness=4)
-    cv2.circle(image, (int(lowest_nose.x * frame_width),int(lowest_nose.y * frame_height)), 1, (0,255,0), thickness=4) 
-    cv2.circle(image, (int(nose_tip.x * frame_width),int(nose_tip.y * frame_height)), 1, (0,255,0), thickness=4)
-
-def draw_calibration_data(image: np.ndarray, relative_iris_landmarks) -> None:
+def get_gaze_feature_vector(face_landmark) -> np.ndarray | None:
     '''
-    Draw the calibration points extracted from the json file, values only 
-    Args : image : openCV frame
-        calibration_data_values : list of calibration data points extracted from the json file, values only'''
-    frame_height, frame_width, _ = image.shape
-    for point in relative_iris_landmarks.values():
-         # Highlight current point in red
-        cv2.circle(image, (int(point["left_iris"][0] * frame_width), int(point["left_iris"][1] * frame_height) ), 1, (0, 255, 0), thickness=4)
-        cv2.circle(image, (int(point["right_iris"][0] * frame_width), int(point["right_iris"][1] * frame_height) ), 1, (0, 255, 0), thickness=4)
+    Calculates the normalized gaze feature vector for the calibration process
+    Args: 
+        face_landmark: the face landmarks from MediaPipe
+        
+    Returns:
+        [avg_norm_gaze_x, avg_norm_gaze_y]
+    '''
+    try:
+        # Get Landmarks (normalized [0, 1])
+        l_iris = face_landmark.landmark[LEFT_IRIS_IDX]
+        r_iris = face_landmark.landmark[RIGHT_IRIS_IDX]
+        l_outer = face_landmark.landmark[LEFT_EYE_OUTER_CORNER_IDX]
+        r_outer = face_landmark.landmark[RIGHT_EYE_OUTER_CORNER_IDX]
+        l_inner = face_landmark.landmark[LEFT_EYE_INNER_CORNER_IDX]
+        r_inner = face_landmark.landmark[RIGHT_EYE_INNER_CORNER_IDX]
+
+        # This distance is a proxy for the face's scale/distance from the camera.
+        inter_ocular_dist = euclidean([l_outer.x, l_outer.y], [r_outer.x, r_outer.y])
+
+        # Left Eye Center Midpoint
+        l_mid_x = (l_inner.x + l_outer.x) / 2
+        l_mid_y = (l_inner.y + l_outer.y) / 2
+        # Right Eye Center Midpoint
+        r_mid_x = (r_inner.x + r_outer.x) / 2
+        r_mid_y = (r_inner.y + r_outer.y) / 2
+        # Gaze offset/Iris center relative to eye midpoint
+        l_gaze_x = l_iris.x - l_mid_x
+        l_gaze_y = l_iris.y - l_mid_y
+        r_gaze_x = r_iris.x - r_mid_x
+        r_gaze_y = r_iris.y - r_mid_y
+
+        # Normalize by inter-ocular distance
+        l_gaze_x_norm = l_gaze_x / inter_ocular_dist
+        l_gaze_y_norm = l_gaze_y / inter_ocular_dist
+        r_gaze_x_norm = r_gaze_x / inter_ocular_dist
+        r_gaze_y_norm = r_gaze_y / inter_ocular_dist
+        
+        # Average the left and right normalized gaze features for stability
+        avg_norm_gaze_x = (l_gaze_x_norm + r_gaze_x_norm) / 2
+        avg_norm_gaze_y = (l_gaze_y_norm + r_gaze_y_norm) / 2
+
+        return np.array([avg_norm_gaze_x, avg_norm_gaze_y], dtype=np.float64)
+    except Exception as e:
+        print("System error at get_gaze_feature_vector()")
+        return None
+    
 
 def show_calibration_window(image: np.ndarray, current_point_index: int, screen_calibration_points: list) -> None:
     '''
@@ -60,59 +93,33 @@ def show_calibration_window(image: np.ndarray, current_point_index: int, screen_
         current_point_index: int representing the current point the eyes should look at
         screen_calibration_points: list of tuples representing the point the eyes should look at
     '''
-    cv2.putText(image, f"Calibrating: Point {current_point_index + 1}/9", 
-            (20, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 0), 2)
     cv2.namedWindow("Calibration", cv2.WND_PROP_FULLSCREEN)
     cv2.setWindowProperty("Calibration", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
-    cal_screen = np.zeros((SCREEN_HEIGHT, SCREEN_WIDTH, 3), dtype=np.uint8) # create a black screen 
+    cal_screen = np.zeros((SCREEN_HEIGHT, SCREEN_WIDTH, 3), dtype=np.uint8)
     if current_point_index < 9:
         point = screen_calibration_points[current_point_index]
         cv2.circle(cal_screen, point, 20, (0, 0, 255), -1)
-        cv2.putText(cal_screen, f"Look at the RED dot and press SPACE ({current_point_index + 1}/9)", 
+        cv2.putText(cal_screen, f"Look at the RED dot and press SPACE ({current_point_index + 1}/9)\nPlease keep your head as steady as possible", 
                     (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+        cv2.putText(cal_screen, "Please keep your head as stable as possible!", 
+                    (50, 80), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
     cv2.imshow('Calibration', cal_screen)
-
-def getIrisCoords(face_landmark) -> dict:
-    '''
-    Get the normalized iris coordinates from the face landmarks
-    Args : face_landmark: the face landmarks from MediaPipe
-    Returns : {'left': (float, float),   'right': (float, float)}
-    '''
-    left_iris = face_landmark.landmark[473]
-    right_iris = face_landmark.landmark[468]
-    return {
-        'left': (left_iris.x, left_iris.y),
-        'right': (right_iris.x, right_iris.y)
-    }
-
-def getNoseCoords(face_landmark) -> dict:
-    '''
-    Get the normalized nose coordinates from the face landmarks
-    Args : face_landmark: the face landmarks from MediaPipe
-    Returns : {'between_brows': (float, float),   'lowest_nose': (float, float)}
-    '''
-    between_brows= face_landmark.landmark[9]
-    lowest_nose = face_landmark.landmark[6] # fun fact, the dip on your nose between the eyes is called radix   
-    return {
-        'between_brows': (between_brows.x, between_brows.y),
-        'lowest_nose': (lowest_nose.x, lowest_nose.y)
-    }
 
 def main():
     capture = cv2.VideoCapture(0)
     tracker = EyeTracker()
-
-    #make sure the cam can be opened
+    kf = KalmanFilter(process_variance=1e-5, measurement_variance=0.8) # Initialize Kalman Filter
+    
     if not capture.isOpened():
         print("cannot open camera")
-        exit()  
+        exit()
 
-    #calibration setup
     screen_calibration_points = tracker.get_calibration_points()
-    current_point_index = 0 
+    current_point_index = 0
 
-    #creating a calibration window  # potentially removable
-    if tracker.is_calibrated == False : 
+    # Flag to ensure the SPACE key press only registers once per press
+    space_key_was_pressed = False 
+    if not tracker.is_calibrated:
         cv2.namedWindow("Calibration", cv2.WND_PROP_FULLSCREEN)
         cv2.setWindowProperty("Calibration", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
 
@@ -122,64 +129,70 @@ def main():
             print("Error: could not read frame")
             break
 
-        # Convert the frame to RGB for MediaPipe 
-        rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB) 
+        # opencv uses BGR scheme, mediapipe uses RGB.
+        rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         result = face_mesh_model.process(rgb_frame)
 
-        if result.multi_face_landmarks: # detected a face at index 0
-            draw_eyes_landmarks(frame, result.multi_face_landmarks[0])
-            iris_coords = getIrisCoords(result.multi_face_landmarks[0])
-            nose_coords = getNoseCoords(result.multi_face_landmarks[0]) 
-            if tracker.is_calibrated and iris_coords:
-                relative_iris_landmarks = tracker.converter(nose_coords)
-                draw_calibration_data(frame, relative_iris_landmarks) #deletable
-                screen_coords = tracker.iris_to_screen_coords(iris_coords['left'], iris_coords['right'],relative_iris_landmarks)
-                cv2.putText(frame, f"Estimated Screen Coords: x={int(screen_coords[0])}, y={int(screen_coords[1])}", (20, 120), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
-                # Move the mouse cursor to the estimated screen coordinates
-                pyautogui.moveTo(int(screen_coords[0]), int(screen_coords[1]), duration=0.1)
+        if result.multi_face_landmarks:
+            face_landmark = result.multi_face_landmarks[0]
+            feature_vector = get_gaze_feature_vector(face_landmark)
 
-        else : 
-            cv2.putText(frame, "No face detected", (20, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
-        
+            if feature_vector is not None:
+                if tracker.is_calibrated:
+                    screen_coords = tracker.iris_to_screen_coords(feature_vector)
+                    if screen_coords is not None:
+                        # Prediction: where the cursor *should* be
+                        kf.predict() 
+                        # Update: correct prediction with the new noisy gaze data
+                        smoothed_x, smoothed_y = kf.update(screen_coords)
 
-        if tracker.is_calibrated :
-            cv2.putText(frame, "Calibration complete! Tracking gaze...", 
-                        (20, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+                        # Move the mouse cursor to the estimated screen coordinates
+                        pyautogui.moveTo(int(smoothed_x), int(smoothed_y))
+                # if is_calibrated==false, then it is in calibrating phase
         else:
+            cv2.putText(frame, "No face detected", (20, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+            cv2.imshow('Video', frame)
+
+        
+        if not tracker.is_calibrated:
             show_calibration_window(frame, current_point_index, screen_calibration_points)
-
-        cv2.imshow('Video', frame)
-
-
-    #   # Handle keyboard input
+        
+        # Handle keyboard input
         key = cv2.waitKey(1) & 0xFF
         
-        if key == ord('q'):
+        if keyboard.is_pressed('q'):
             break
-        elif key == ord('r'):  # Reset calibration
+        if keyboard.is_pressed('r'):  # Reset calibration
             tracker.calibration_data = {}
             tracker.is_calibrated = False
-            is_calibrating = True
             current_point_index = 0
             if os.path.exists(tracker.calibration_file):
                 os.remove(tracker.calibration_file)
             print("Calibration reset!")
-            print("NOT YET IMPLEMENTED")
-        elif key == ord(' ') and not tracker.is_calibrated and iris_coords and current_point_index < 9:
-            # Calibrate current point
-            current_point = screen_calibration_points[current_point_index]
-            tracker.add_calibration_point(iris_coords, nose_coords, current_point)
-            current_point_index += 1
+            # Re-initialize Kalman Filter on reset
+            kf = KalmanFilter(process_variance=1e-5, measurement_variance=0.8)
+
+        elif not tracker.is_calibrated and feature_vector is not None and current_point_index < 9:
             
-            #if all points done
-            if current_point_index >= 9:
-                tracker.is_calibrated = True
-                tracker.save_calibration()
-                cv2.destroyWindow('Calibration')
+            is_space_pressed = keyboard.is_pressed('space')
+            if is_space_pressed and not space_key_was_pressed:
+                # Capture the calibration point only on the DOWN stroke
+                current_point = screen_calibration_points[current_point_index]
+                tracker.add_calibration_point(feature_vector, current_point)
+                current_point_index += 1
+                
+                # If all points done
+                if current_point_index >= 9:
+                    tracker.train_mapping_model()
+                    tracker.save_calibration()
+                    cv2.destroyWindow('Calibration')
+            
+            # Update the debounce flag for the next iteration
+            space_key_was_pressed = is_space_pressed
 
     capture.release()
     cv2.destroyAllWindows()
 
 
 if __name__ == "__main__":
-    main()  
+    main()
