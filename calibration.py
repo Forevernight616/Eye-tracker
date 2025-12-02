@@ -1,4 +1,3 @@
-import math
 import numpy as np
 import json
 import os
@@ -12,8 +11,8 @@ class EyeTracker:
         self.calibration_data = {} # refers to the x_y of the eyes when stairing at the calibration points
         self.is_calibrated = False
         self.calibration_file = "eye_calibration.json"
-        self.load_calibration()
         self.POLY_DEGREE=2
+        self.load_calibration()
         # The coefficients for the polynomial mapping (X and Y separately). f(x)=ax^2 + bx + c
         self.poly_x_coeffs = None
         self.poly_y_coeffs = None
@@ -104,17 +103,18 @@ class EyeTracker:
         '''
         if os.path.exists(self.calibration_file):
             try:
+                print("Loading calibration data...----------------------------------------------")
                 with open(self.calibration_file, 'r') as f:
                     self.calibration_data = json.load(f)
 
-                    # for key in self.calibration_data:
-                        # self.calibration_data[key]['feature'] = np.array(self.calibration_data[key]['feature'])
+                    for key in self.calibration_data:
+                        self.calibration_data[key]['feature'] = np.array(self.calibration_data[key]['feature'])
                     
                     if len(self.calibration_data) >= self.POLY_DEGREE + 1:
                         self.is_calibrated=True
                         self.train_mapping_model() # Train on load
-            except:
-                print("Error in load_calibration")
+            except Exception as e:
+                print(f"Error in load_calibration: {e}")
 
     @staticmethod
     def get_calibration_points() -> list[tuple]:
@@ -131,3 +131,5 @@ class EyeTracker:
             (5*SCREEN_WIDTH//6, 5*SCREEN_HEIGHT//6),
         ]
         return points
+    
+ 
