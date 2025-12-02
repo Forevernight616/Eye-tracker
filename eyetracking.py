@@ -134,6 +134,7 @@ def main():
         result = face_mesh_model.process(rgb_frame)
 
         if result.multi_face_landmarks:
+            cv2.destroyAllWindows()
             face_landmark = result.multi_face_landmarks[0]
             feature_vector = get_gaze_feature_vector(face_landmark)
 
