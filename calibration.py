@@ -12,10 +12,12 @@ class EyeTracker:
         self.is_calibrated = False
         self.calibration_file = "eye_calibration.json"
         self.POLY_DEGREE=2
-        self.load_calibration()
         # The coefficients for the polynomial mapping (X and Y separately). f(x)=ax^2 + bx + c
         self.poly_x_coeffs = None
         self.poly_y_coeffs = None
+        self.load_calibration()
+        
+        
 
     def add_calibration_point(self, feature_vector: np.ndarray, screen_coords: tuple) -> None:
         '''
