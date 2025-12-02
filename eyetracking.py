@@ -134,12 +134,14 @@ def main():
         result = face_mesh_model.process(rgb_frame)
 
         if result.multi_face_landmarks:
+            cv2.destroyAllWindows()
             face_landmark = result.multi_face_landmarks[0]
             feature_vector = get_gaze_feature_vector(face_landmark)
 
             if feature_vector is not None:
                 if tracker.is_calibrated:
                     screen_coords = tracker.iris_to_screen_coords(feature_vector)
+                    print(screen_coords)
                     if screen_coords is not None:
                         # Prediction: where the cursor *should* be
                         kf.predict() 
@@ -148,7 +150,7 @@ def main():
 
                         # Move the mouse cursor to the estimated screen coordinates
                         pyautogui.moveTo(int(smoothed_x), int(smoothed_y))
-                # if is_calibrated==false, then it is in calibrating phase
+        # if is_calibrated==false, then it is in calibrating phase
         else:
             cv2.putText(frame, "No face detected", (20, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
             cv2.imshow('Video', frame)
