@@ -10,8 +10,7 @@ from KalmanFilter import KalmanFilter
 from Controller import Controller
 from scipy.spatial.distance import euclidean
 
-pyautogui.FAILSAFE = False
-
+pyautogui.FAILSAFE = False 
 
 #global setup for MediaPipe
 mp_drawing = mp.solutions.drawing_utils
@@ -160,9 +159,6 @@ def main():
         elif not result.multi_face_landmarks:
             cv2.putText(frame, "No face detected", (20, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
             cv2.imshow('Video', frame)
-
-        if not tracker.is_calibrated:
-            show_calibration_window(frame, current_point_index, screen_calibration_points)
         
         cv2.waitKey(1)
         if controller.in_insert_mode: #help with optimization
@@ -184,6 +180,7 @@ def main():
             kf = KalmanFilter(process_variance=1e-5, measurement_variance=0.8)
         
         elif not tracker.is_calibrated and feature_vector is not None and current_point_index < 9:    
+            show_calibration_window(frame, current_point_index, screen_calibration_points)
             is_space_pressed = keyboard.is_pressed('space')
             if is_space_pressed and not space_key_was_pressed:
                 # Capture the calibration point only on the DOWN stroke
@@ -215,6 +212,12 @@ def main():
         if x_change != 0 or y_change != 0:
             pyautogui.move(x_change, y_change, duration=0)
         
+        # Handle scrolling
+        if controller.is_scrolling_down:
+            pyautogui.scroll(-controller.getScrollAmount())  # Negative scrolls down
+        if controller.is_scrolling_up:
+            pyautogui.scroll(controller.getScrollAmount())  # Positive scrolls up
+
         time.sleep(0.01) # Sleep briefly to prevent busy-waiting
         
     keyboard.unhook_all()   
