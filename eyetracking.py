@@ -10,8 +10,6 @@ from KalmanFilter import KalmanFilter
 from Controller import Controller
 from scipy.spatial.distance import euclidean
 
-
-
 pyautogui.FAILSAFE = False
 
 
@@ -144,7 +142,7 @@ def main():
         rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         result = face_mesh_model.process(rgb_frame)
 
-        if not controller.in_insert_mode and result.multi_face_landmarks:
+        if controller.should_use_eye_tracking() and result.multi_face_landmarks:
             face_landmark = result.multi_face_landmarks[0]
             feature_vector = get_gaze_feature_vector(face_landmark)
 

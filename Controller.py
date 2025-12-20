@@ -1,6 +1,9 @@
 import keyboard
 import pyautogui
+import time
 pyautogui.FAILSAFE = False
+
+MANUAL_MOVE_COOLDOWN = 1.5
 
 class Controller:
     def __init__(self):
@@ -15,14 +18,29 @@ class Controller:
         self.is_moving_up = False
         self.is_moving_down = False
 
+        # track last manual movement time 
+        self.last_manual_move_time = 0
+
         # Different modes:
-        # there are only 2 states: insert mode and normal mode
-        # insert mode frees up the whole keyboard for typing, normal mode captures keys for cursor control
-        self.in_insert_mode = True 
+        self.in_insert_mode = True #start in insert mode
         self.current_keybinds = []
 
+    def is_manual_movement_active(self):
+        return (self.is_moving_left or self.is_moving_right or 
+                self.is_moving_up or self.is_moving_down)
+
+    def should_use_eye_tracking(self):
+        if self.in_insert_mode:
+            return False    
+        if self.is_manual_movement_active():
+            return False
+        
+        # Check if enough time has passed since the last manual movement
+        time_since_last_move = time.time() - self.last_manual_move_time
+        return time_since_last_move > MANUAL_MOVE_COOLDOWN
 
     def handle_move_press(self, key_name):
+        self.last_manual_move_time = time.time()
         if key_name == 's':
             self.is_moving_left = True
         elif key_name == 'f':
@@ -34,6 +52,7 @@ class Controller:
 
     # Release handlers set the flag back to False
     def handle_move_release(self, key_name):
+        self.last_manual_move_time = time.time()
         if key_name == 's':
             self.is_moving_left = False
         elif key_name == 'f':
@@ -42,8 +61,6 @@ class Controller:
             self.is_moving_up = False
         elif key_name == 'd':
             self.is_moving_down = False
-
-
 
     # Handler function
     def handle_q(self,e):
@@ -58,7 +75,12 @@ class Controller:
     #     if not self.in_insert_mode:
     #         self.should_calibrate_point = True
 
-    
+    def press_down_left_click(self):
+        if not self.in_insert_mode:
+            pyautogui.mouseDown(button='left')
+    def release_left_click(self):
+        if not self.in_insert_mode:
+            pyautogui.mouseUp(button='left')
 
     def enter_insert_mode(self):
         if self.in_insert_mode:
@@ -85,6 +107,9 @@ class Controller:
         self.current_keybinds.append(keyboard.on_press_key('q', self.handle_q, suppress=True))
         self.current_keybinds.append(keyboard.on_press_key('r', self.handle_r, suppress=True))
         # self.current_keybinds.append(keyboard.on_press_key('space', self.handle_space, suppress=True))
+
+        keyboard.on_press_key('j', lambda e: self.press_down_left_click(), suppress=True)
+        keyboard.on_release_key('j', lambda e: self.release_left_click(), suppress=True)
 
         keyboard.on_press_key('s', lambda e: self.handle_move_press('s'), suppress=True)
         keyboard.on_release_key('s', lambda e: self.handle_move_release('s'), suppress=True)
