@@ -4,10 +4,10 @@ import time
 pyautogui.FAILSAFE = False
 
 MANUAL_MOVE_COOLDOWN = 1.5
+SCROLL_AMOUNT = 55  # number of pixel per scroll
 
 class Controller:
     def __init__(self):
-
         self.should_exit = False
         self.should_reset_calibration = False
         self.should_calibrate_point = False
@@ -21,9 +21,16 @@ class Controller:
         # track last manual movement time 
         self.last_manual_move_time = 0
 
+        # flags for scrolling
+        self.is_scrolling_down = False
+        self.is_scrolling_up = False
+
         # Different modes:
         self.in_insert_mode = True #start in insert mode
         self.current_keybinds = []
+
+    def getScrollAmount(self):
+        return SCROLL_AMOUNT
 
     def is_manual_movement_active(self):
         return (self.is_moving_left or self.is_moving_right or 
@@ -71,9 +78,10 @@ class Controller:
         if not self.in_insert_mode:
             self.should_reset_calibration = True
 
-    # def handle_space(self, e):
-    #     if not self.in_insert_mode:
-    #         self.should_calibrate_point = True
+    def right_click(self, e):
+        if not self.in_insert_mode:
+            pyautogui.rightClick()
+
 
     def press_down_left_click(self):
         if not self.in_insert_mode:
@@ -81,6 +89,20 @@ class Controller:
     def release_left_click(self):
         if not self.in_insert_mode:
             pyautogui.mouseUp(button='left')
+
+    def handle_scroll_press(self, key_name):
+        self.last_manual_move_time = time.time()
+        if key_name == 'l':
+            self.is_scrolling_down = True
+        elif key_name == ';':
+            self.is_scrolling_up = True
+
+    def handle_scroll_release(self, key_name):
+        self.last_manual_move_time = time.time()
+        if key_name == 'l':
+            self.is_scrolling_down = False
+        elif key_name == ';':
+            self.is_scrolling_up = False
 
     def enter_insert_mode(self):
         if self.in_insert_mode:
@@ -106,7 +128,7 @@ class Controller:
         
         self.current_keybinds.append(keyboard.on_press_key('q', self.handle_q, suppress=True))
         self.current_keybinds.append(keyboard.on_press_key('r', self.handle_r, suppress=True))
-        # self.current_keybinds.append(keyboard.on_press_key('space', self.handle_space, suppress=True))
+        self.current_keybinds.append(keyboard.on_press_key('k', self.right_click, suppress=True))
 
         keyboard.on_press_key('j', lambda e: self.press_down_left_click(), suppress=True)
         keyboard.on_release_key('j', lambda e: self.release_left_click(), suppress=True)
@@ -122,6 +144,13 @@ class Controller:
 
         keyboard.on_press_key('d', lambda e: self.handle_move_press('d'), suppress=True)
         keyboard.on_release_key('d', lambda e: self.handle_move_release('d'), suppress=True)
+
+        keyboard.on_press_key('l', lambda e: self.handle_scroll_press('l'), suppress=True)
+        keyboard.on_release_key('l', lambda e: self.handle_scroll_release('l'), suppress=True)
+
+        keyboard.on_press_key(';', lambda e: self.handle_scroll_press(';'), suppress=True)
+        keyboard.on_release_key(';', lambda e: self.handle_scroll_release(';'), suppress=True)
+        
         print("Normal mode activated. Keybindings are active.")
         
 
