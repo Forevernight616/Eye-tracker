@@ -38,7 +38,7 @@ def handle_move_release(key_name):
         is_moving_left = False
     elif key_name == 'f':
         is_moving_right = False
-    elif key_name == 'e':
+    elif key_name == 'e': 
         is_moving_up = False
     elif key_name == 'd':
         is_moving_down = False
