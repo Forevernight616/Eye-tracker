@@ -1,13 +1,16 @@
 import mediapipe as mp
 import cv2
 import numpy as np
+import time
 import os
 import pyautogui
+import keyboard
 from calibration import EyeTracker
 from KalmanFilter import KalmanFilter
+from Controller import Controller
 from scipy.spatial.distance import euclidean
 
-import keyboard
+
 
 pyautogui.FAILSAFE = False
 
@@ -109,16 +112,24 @@ def main():
     capture = cv2.VideoCapture(0)
     tracker = EyeTracker()
     kf = KalmanFilter(process_variance=1e-5, measurement_variance=0.8) # Initialize Kalman Filter
+    controller = Controller()
     
     if not capture.isOpened():
         print("cannot open camera")
         exit()
 
+    #Set up screen calibration
     screen_calibration_points = tracker.get_calibration_points()
     current_point_index = 0
 
+    #Set up keyboard controller
+    keyboard.on_press_key('i', lambda e: controller.enter_insert_mode(), suppress=False)
+    keyboard.on_press_key('`', lambda e: controller.enter_normal_mode(), suppress=True)
+    MOVE_SPEED = 10  # pixels per movement step 
+    controller.enter_normal_mode()
     # Flag to ensure the SPACE key press only registers once per press
     space_key_was_pressed = False 
+    
     if not tracker.is_calibrated:
         cv2.namedWindow("Calibration", cv2.WND_PROP_FULLSCREEN)
         cv2.setWindowProperty("Calibration", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
@@ -133,38 +144,38 @@ def main():
         rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         result = face_mesh_model.process(rgb_frame)
 
-        if result.multi_face_landmarks:
-            cv2.destroyAllWindows()
+        if not controller.in_insert_mode and result.multi_face_landmarks:
             face_landmark = result.multi_face_landmarks[0]
             feature_vector = get_gaze_feature_vector(face_landmark)
 
-            if feature_vector is not None:
-                if tracker.is_calibrated:
-                    screen_coords = tracker.iris_to_screen_coords(feature_vector)
-                    print(screen_coords)
-                    if screen_coords is not None:
-                        # Prediction: where the cursor *should* be
-                        kf.predict() 
-                        # Update: correct prediction with the new noisy gaze data
-                        smoothed_x, smoothed_y = kf.update(screen_coords)
+            if feature_vector is not None and tracker.is_calibrated:
+                screen_coords = tracker.iris_to_screen_coords(feature_vector)
+                if screen_coords is not None:
+                    # Prediction: where the cursor *should* be
+                    kf.predict() 
+                    # Update: correct prediction with the new noisy gaze data
+                    smoothed_x, smoothed_y = kf.update(screen_coords)
 
-                        # Move the mouse cursor to the estimated screen coordinates
-                        pyautogui.moveTo(int(smoothed_x), int(smoothed_y))
-        # if is_calibrated==false, then it is in calibrating phase
-        else:
+                    # Move the mouse cursor to the estimated screen coordinates
+                    pyautogui.moveTo(int(smoothed_x), int(smoothed_y))
+        
+        elif not result.multi_face_landmarks:
             cv2.putText(frame, "No face detected", (20, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
             cv2.imshow('Video', frame)
 
-        
         if not tracker.is_calibrated:
             show_calibration_window(frame, current_point_index, screen_calibration_points)
         
-        # Handle keyboard input
-        key = cv2.waitKey(1) & 0xFF
-        
-        if keyboard.is_pressed('q'):
+        cv2.waitKey(1)
+        if controller.in_insert_mode: #help with optimization
+            time.sleep(0.08)
+
+        if controller.should_exit: # User hits q
             break
-        if keyboard.is_pressed('r'):  # Reset calibration
+        elif controller.should_reset_calibration: # User hit r
+            controller.should_reset_calibration = False
+            controller.enter_normal_mode()
+
             tracker.calibration_data = {}
             tracker.is_calibrated = False
             current_point_index = 0
@@ -173,16 +184,14 @@ def main():
             print("Calibration reset!")
             # Re-initialize Kalman Filter on reset
             kf = KalmanFilter(process_variance=1e-5, measurement_variance=0.8)
-
-        elif not tracker.is_calibrated and feature_vector is not None and current_point_index < 9:
-            
+        
+        elif not tracker.is_calibrated and feature_vector is not None and current_point_index < 9:    
             is_space_pressed = keyboard.is_pressed('space')
             if is_space_pressed and not space_key_was_pressed:
                 # Capture the calibration point only on the DOWN stroke
                 current_point = screen_calibration_points[current_point_index]
                 tracker.add_calibration_point(feature_vector, current_point)
                 current_point_index += 1
-                
                 # If all points done
                 if current_point_index >= 9:
                     tracker.train_mapping_model()
@@ -192,6 +201,25 @@ def main():
             # Update the debounce flag for the next iteration
             space_key_was_pressed = is_space_pressed
 
+        x_change = 0
+        y_change = 0
+
+        if controller.is_moving_left:
+            x_change -= MOVE_SPEED
+        if controller.is_moving_right:
+            x_change += MOVE_SPEED
+        if controller.is_moving_up:
+            y_change -= MOVE_SPEED
+        if controller.is_moving_down:
+            y_change += MOVE_SPEED
+            
+        # Only call pyautogui.move() if a movement key is pressed
+        if x_change != 0 or y_change != 0:
+            pyautogui.move(x_change, y_change, duration=0)
+        
+        time.sleep(0.01) # Sleep briefly to prevent busy-waiting
+        
+    keyboard.unhook_all()   
     capture.release()
     cv2.destroyAllWindows()
 

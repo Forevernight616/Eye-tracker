@@ -13,20 +13,12 @@ is_moving_right = False
 is_moving_up = False
 is_moving_down = False
 
-
 # Different modes:
 # there are only 2 states: insert mode and normal mode
 # insert mode frees up the whole keyboard for typing, normal mode captures keys for cursor control
-in_insert_mode = True   
+in_insert_mode = True 
 current_keybinds = []
 
-def toggle_insert_mode(key_name):
-    global in_insert_mode
-    if key_name == 'i':
-        in_insert_mode = True
-    elif key_name == ';q':
-        in_insert_mode = False
-     
 
 def handle_move_press(key_name):
     global is_moving_left, is_moving_right, is_moving_up, is_moving_down
@@ -46,7 +38,7 @@ def handle_move_release(key_name):
         is_moving_left = False
     elif key_name == 'f':
         is_moving_right = False
-    elif key_name == 'e':
+    elif key_name == 'e': 
         is_moving_up = False
     elif key_name == 'd':
         is_moving_down = False
@@ -54,7 +46,6 @@ def handle_move_release(key_name):
 
 # Handler function
 def handle_q(e):
-    # e is the keyboard.KeyboardEvent object, but we don't need it.
     global should_exit
     if not in_insert_mode:
         should_exit = True
@@ -73,13 +64,16 @@ def enter_insert_mode():
     global in_insert_mode
     if in_insert_mode:
         return
-    
-    in_insert_mode = True
 
-    # Unhook all movement and action keys
-    for key in current_keybinds:
-        keyboard.unhook_key(key)
+    in_insert_mode = True
+    print("Entering insert mode, removing keybindings.")
+
+    # Unhook all movement and action keys using the stored hook objects
+    keyboard.unhook_all()
+    keyboard.on_press_key('`', lambda e: enter_normal_mode(), suppress=True) 
     current_keybinds.clear()
+    
+    print("Insert mode activated. Keyboard is free for typing.")
 
 def enter_normal_mode():
     global in_insert_mode
@@ -89,25 +83,33 @@ def enter_normal_mode():
     in_insert_mode = False
     # Re-hook all movement and action keys
     print("Entering normal mode, setting up keybindings.")
+    
     current_keybinds.append(keyboard.on_press_key('q', handle_q, suppress=True))
     current_keybinds.append(keyboard.on_press_key('r', handle_r, suppress=True))
     current_keybinds.append(keyboard.on_press_key('space', handle_space, suppress=True))
 
-    for move_key in ['s', 'f', 'e', 'd']:
-        current_keybinds.append(keyboard.on_press_key(move_key, lambda e, k=move_key: handle_move_press(k), suppress=True))
-        current_keybinds.append(keyboard.on_release_key(move_key, lambda e, k=move_key: handle_move_release(k), suppress=True))
-
+    keyboard.on_press_key('s', lambda e: handle_move_press('s'), suppress=True)
+    keyboard.on_release_key('s', lambda e: handle_move_release('s'), suppress=True)
+    
+    keyboard.on_press_key('f', lambda e: handle_move_press('f'), suppress=True)
+    keyboard.on_release_key('f', lambda e: handle_move_release('f'), suppress=True)
+    
+    keyboard.on_press_key('e', lambda e: handle_move_press('e'), suppress=True)
+    keyboard.on_release_key('e', lambda e: handle_move_release('e'), suppress=True)
+    
+    keyboard.on_press_key('d', lambda e: handle_move_press('d'), suppress=True)
+    keyboard.on_release_key('d', lambda e: handle_move_release('d'), suppress=True)
     print("Normal mode activated. Keybindings are active.")
-
+    
 def main():
     global should_exit
     global should_reset_calibration
     global should_calibrate_point
     global in_insert_mode
 
-    keyboard.on_press_key('i', lambda e: enter_insert_mode(), suppress=True)
-    keyboard.add_hotkey(';+q', lambda: enter_normal_mode(), suppress=True)
-    MOVE_SPEED = 10  # pixels per movement step
+    keyboard.on_press_key('i', lambda e: enter_insert_mode(), suppress=False)
+    keyboard.on_press_key('`', lambda e: enter_normal_mode(), suppress=True)
+    MOVE_SPEED = 10  # pixels per movement step 
     
     enter_normal_mode()
     while True:
@@ -147,5 +149,3 @@ def main():
     
 if __name__ == "__main__":
     main()
-
-        
