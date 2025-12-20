@@ -14,8 +14,6 @@ Keybinds: The program has 2 modes
     Insert mode: frees up the whole keyboard for typing and the eyetracker stops
 ```
 - i : enter insert mode
-- s, d, f, e: each of these correspond to a movement of the cursor (s-left, d-down, f-right, e-up).
-- j : click (hold and combine with sdfe for mouse drag effect)
 
 ```
     Normal mode: the eyetracker works again and start capturing keys for cursor control
@@ -23,6 +21,12 @@ Keybinds: The program has 2 modes
 - ` (tilde, next to "1") : enter normal mode
 - q : quit
 - r : reset calibration data, you will be prompted with a new calibartion window.
+
+- s, d, f, e: each of these correspond to a movement of the cursor (s-left, d-down, f-right, e-up).
+- j : left click (hold and combine with sdfe for mouse drag effect)
+- k : right click
+- l : scroll up
+- ; : scroll down
 
 
 # Installation
