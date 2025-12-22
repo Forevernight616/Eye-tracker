@@ -118,20 +118,5 @@ class EyeTracker:
             except Exception as e:
                 print(f"Error in load_calibration: {e}")
 
-    @staticmethod
-    def get_calibration_points() -> list[tuple]:
-        # Calibration points (9-point calibration)
-        points = [
-            (SCREEN_WIDTH//6, 0),
-            (SCREEN_WIDTH//2, 0),
-            (5*SCREEN_WIDTH//6, 0),
-            (SCREEN_WIDTH//6, SCREEN_HEIGHT//2),
-            (SCREEN_WIDTH//2, SCREEN_HEIGHT//2),
-            (5*SCREEN_WIDTH//6, SCREEN_HEIGHT//2),
-            (SCREEN_WIDTH//6, 5*SCREEN_HEIGHT//6),
-            (SCREEN_WIDTH//2, 5*SCREEN_HEIGHT//6),
-            (5*SCREEN_WIDTH//6, 5*SCREEN_HEIGHT//6),
-        ]
-        return points
     
  
