@@ -1,6 +1,10 @@
 # Eye Tracking Application
 
-A lightweight eye-tracking program using OpenCV. This application captures webcam input and performs real-time gaze detection. The user gaze is then used to move the cursor.
+Instead of having to move your hand from the keyboard to the mouse, or marginally move your thumb from the spacebar to the trackpad to control the cursor, this program solve that issue.
+
+This is a lightweight eye-tracking program using OpenCV. This application captures webcam input and performs real-time gaze detection. The user gaze is then used to move the cursor, while still allowing the user to take over the cursor for more precise cursor control. Everything can be done on the keyboard, effectively removing the need for a mouse or a trackpad.
+
+If you feel like this is a project that would benefit you, or the wider community, please feel free to contribute, or reach out to me for code clarification (this repo is kinda sloppy, so I expect a lot of questions). Thanks!
 
 ---
 # Instruction
